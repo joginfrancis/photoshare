@@ -8,241 +8,306 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #0d0d0d;
-      color: #f0f0f0;
-      min-height: 100dvh;
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      background: #fff;
+      color: #202124;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
 
-    /* ── Top bar ── */
-    .topbar {
-      padding: 1.25rem 1.5rem 0;
+    /* ── Header ── */
+    header {
       display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.25rem 1.5rem;
+      flex-shrink: 0;
     }
-    .topbar h1 { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; }
-    .topbar p  { font-size: 0.82rem; color: #555; }
 
-    /* ── Status pill ── */
+    .wordmark {
+      font-size: 1.15rem;
+      font-weight: 500;
+      color: #202124;
+      letter-spacing: -0.01em;
+    }
+
+    /* ── Status chip ── */
     #status {
-      margin: 1rem 1.5rem 0;
       display: inline-flex;
       align-items: center;
-      gap: 0.4rem;
-      font-size: 0.9rem;
-      font-weight: 600;
-      padding: 0.55rem 1.1rem;
-      border-radius: 2rem;
-      background: #1a1a1a;
-      color: #666;
-      align-self: flex-start;
+      gap: 0.45rem;
+      padding: 0.45rem 1rem;
+      border-radius: 100px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      background: #f1f3f4;
+      color: #5f6368;
       transition: background 0.3s, color 0.3s;
     }
-    #status::before { content: '●'; font-size: 0.5rem; }
-    #status.spin     { color: #888; }
-    #status.spin::before { content: ''; animation: none; }
-    #status.spin::after  {
-      content: '';
-      width: 12px; height: 12px;
-      border: 2px solid #444;
-      border-top-color: #888;
+    .dot {
+      width: 7px; height: 7px;
       border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      background: #bdc1c6;
+      flex-shrink: 0;
+      transition: background 0.3s;
     }
-    #status.ready   { background: #0d2a1a; color: #4ade80; }
-    #status.ready::before  { color: #4ade80; }
-    #status.error   { background: #2a0d0d; color: #f87171; }
-    #status.error::before  { color: #f87171; }
-    #status.sending { background: #0d1a2a; color: #60a5fa; }
-    #status.sending::before { color: #60a5fa; }
-    #status.done    { background: #0d2a1a; color: #4ade80; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .ring {
+      width: 14px; height: 14px;
+      border: 2px solid #dadce0;
+      border-top-color: #1a73e8;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      flex-shrink: 0;
+      display: none;
+    }
+    #status.connecting .dot  { display: none; }
+    #status.connecting .ring { display: block; }
+    #status.connected  { background: #e6f4ea; color: #137333; }
+    #status.connected  .dot  { background: #34a853; }
+    #status.sending    { background: #e8f0fe; color: #1a73e8; }
+    #status.sending    .dot  { background: #1a73e8; animation: pulse 1s ease-in-out infinite; }
+    #status.done       { background: #e6f4ea; color: #137333; }
+    #status.done       .dot  { background: #34a853; }
+    #status.error      { background: #fce8e6; color: #c5221f; }
+    #status.error      .dot  { background: #ea4335; }
 
-    /* ── Preview image ── */
-    #preview-wrap {
+    @keyframes spin  { to { transform: rotate(360deg); } }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.35; } }
+
+    /* ── Preview area ── */
+    .preview-area {
       flex: 1;
+      position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 1.5rem;
-      min-height: 0;
+      overflow: hidden;
+      background: #f8f9fa;
     }
+
     #preview {
       display: none;
-      max-width: 100%;
-      max-height: 50dvh;
-      border-radius: 1.25rem;
-      object-fit: contain;
-      box-shadow: 0 8px 40px #0009;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
     }
-    #placeholder {
+
+    .placeholder {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0.75rem;
-      color: #2a2a2a;
+      gap: 1rem;
+      color: #dadce0;
+      user-select: none;
     }
-    #placeholder svg { width: 80px; height: 80px; }
-    #placeholder p   { font-size: 0.85rem; }
+    .placeholder svg  { width: 72px; height: 72px; }
+    .placeholder span { font-size: 0.85rem; color: #bdc1c6; }
 
-    /* ── Progress bar ── */
-    #progress-wrap {
+    /* ── Bottom dock ── */
+    .dock {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.25rem;
+      padding: 1.75rem 1.5rem;
+      padding-bottom: max(1.75rem, env(safe-area-inset-bottom));
+      background: #fff;
+    }
+
+    /* Progress bar */
+    #prog-wrap {
       display: none;
-      margin: 0 1.5rem;
-      height: 6px;
-      background: #1a1a1a;
-      border-radius: 3px;
+      width: 100%;
+      height: 3px;
+      background: #e8eaed;
+      border-radius: 2px;
       overflow: hidden;
     }
-    #progress-bar {
+    #prog-bar {
       height: 100%;
       width: 0;
-      background: linear-gradient(90deg, #4ade80, #22c55e);
-      border-radius: 3px;
+      background: #1a73e8;
+      border-radius: 2px;
       transition: width 0.1s;
     }
 
-    /* ── Action buttons ── */
-    .actions {
+    /* File size label */
+    #file-label {
       display: none;
-      flex-direction: column;
-      gap: 0.75rem;
-      padding: 1.25rem 1.5rem;
-      padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+      font-size: 0.8rem;
+      color: #9aa0a6;
+      letter-spacing: 0.01em;
     }
-    .btn-row {
-      display: flex;
-      gap: 0.75rem;
-    }
-    .btn {
-      flex: 1;
-      padding: 1rem;
-      border: none;
-      border-radius: 1rem;
-      font-size: 1rem;
-      font-weight: 700;
+
+    /* ── Shutter button ── */
+    #shutter {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      border: 3.5px solid #dadce0;
+      background: #fff;
       cursor: pointer;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 0.35rem;
-      min-height: 80px;
-      transition: transform 0.1s, opacity 0.2s;
       -webkit-tap-highlight-color: transparent;
+      transition: transform 0.12s, border-color 0.2s;
+      flex-shrink: 0;
+      box-shadow: 0 1px 4px #0001;
     }
-    .btn:active { transform: scale(0.97); }
-    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
-    .btn .icon { font-size: 1.75rem; line-height: 1; }
-    .btn .label { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.03em; }
+    #shutter:active:not(:disabled)  { transform: scale(0.91); }
+    #shutter:disabled { opacity: 0.35; cursor: not-allowed; }
 
-    #camera-btn  { background: #1d4ed8; color: #fff; }
-    #gallery-btn { background: #1a1a1a; color: #f0f0f0; border: 1.5px solid #2a2a2a; }
+    .shutter-core {
+      width: 62px; height: 62px;
+      border-radius: 50%;
+      background: #202124;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    #shutter:not(:disabled):active .shutter-core { background: #1a73e8; }
+    .shutter-core svg { width: 30px; height: 30px; fill: #fff; }
+
+    /* ── Send / retake row ── */
+    #action-row {
+      display: none;
+      width: 100%;
+      gap: 0.75rem;
+      flex-direction: column;
+    }
 
     #send-btn {
       width: 100%;
-      padding: 1.1rem;
+      min-height: 56px;
       border: none;
-      border-radius: 1rem;
-      font-size: 1.1rem;
-      font-weight: 800;
-      background: #4ade80;
-      color: #000;
+      border-radius: 100px;
+      background: #1a73e8;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 500;
       cursor: pointer;
-      min-height: 64px;
-      display: none;
-      transition: transform 0.1s;
+      letter-spacing: 0.01em;
+      transition: background 0.15s, transform 0.1s;
       -webkit-tap-highlight-color: transparent;
-      letter-spacing: -0.01em;
     }
-    #send-btn:active   { transform: scale(0.98); }
-    #send-btn:disabled { opacity: 0.4; }
+    #send-btn:active:not(:disabled) { background: #1558d6; transform: scale(0.98); }
+    #send-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-    #conn-info {
-      text-align: center;
-      font-size: 0.72rem;
-      color: #333;
-      padding-bottom: 0.25rem;
+    #retake-btn {
+      width: 100%;
+      min-height: 44px;
+      border: none;
+      border-radius: 100px;
+      background: transparent;
+      color: #5f6368;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      letter-spacing: 0.01em;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #retake-btn:active { opacity: 0.6; }
+
+    /* ── Media queries ── */
+    @media (min-height: 700px) {
+      #shutter { width: 96px; height: 96px; }
+      .shutter-core { width: 76px; height: 76px; }
+      .shutter-core svg { width: 36px; height: 36px; }
+      .dock { gap: 1.5rem; padding: 2rem 1.5rem; padding-bottom: max(2rem, env(safe-area-inset-bottom)); }
+      #send-btn { min-height: 60px; font-size: 1.05rem; }
+    }
+
+    @media (min-height: 800px) {
+      #shutter { width: 112px; height: 112px; border-width: 4px; }
+      .shutter-core { width: 90px; height: 90px; }
+      .shutter-core svg { width: 42px; height: 42px; }
+      .dock { gap: 1.75rem; padding: 2.25rem 2rem; padding-bottom: max(2.25rem, env(safe-area-inset-bottom)); }
+      header { padding: 1.5rem 2rem; }
+      .placeholder svg { width: 90px; height: 90px; }
+    }
+
+    @media (min-width: 400px) {
+      header { padding: 1.5rem 2rem; }
+      .dock { padding-left: 2rem; padding-right: 2rem; }
     }
   </style>
 </head>
 <body>
 
-  <div class="topbar">
-    <h1>PhotoShare</h1>
-    <p>Send a photo wirelessly to the desktop</p>
-  </div>
+  <header>
+    <span class="wordmark">PhotoShare</span>
+    <div id="status" class="connecting">
+      <div class="ring"></div>
+      <div class="dot"></div>
+      <span id="status-text">Connecting</span>
+    </div>
+  </header>
 
-  <div id="status" class="spin">Connecting</div>
-
-  <div id="preview-wrap">
-    <!-- Placeholder shown before a photo is picked -->
-    <div id="placeholder">
-      <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="8" y="16" width="64" height="48" rx="8" stroke="currentColor" stroke-width="3"/>
-        <circle cx="40" cy="38" r="11" stroke="currentColor" stroke-width="3"/>
-        <circle cx="40" cy="38" r="5" fill="currentColor" opacity=".4"/>
-        <rect x="28" y="10" width="24" height="10" rx="3" stroke="currentColor" stroke-width="2.5"/>
+  <div class="preview-area">
+    <div class="placeholder" id="placeholder">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9 3L7.17 5H4C2.9 5 2 5.9 2 7v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2h-3.17L15 3H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
+        <circle cx="12" cy="13" r="2.5" opacity=".55"/>
       </svg>
-      <p>Photo preview will appear here</p>
+      <span>Tap the button to take a photo</span>
     </div>
-    <img id="preview" alt="Selected photo">
+    <img id="preview" alt="">
   </div>
 
-  <div id="progress-wrap"><div id="progress-bar"></div></div>
+  <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
 
-  <!-- Hidden file inputs -->
-  <input type="file" id="camera-input"  accept="image/*" capture="environment" style="display:none">
-  <input type="file" id="gallery-input" accept="image/*" style="display:none">
+  <div class="dock">
+    <div id="prog-wrap"><div id="prog-bar"></div></div>
 
-  <!-- Buttons revealed after WebRTC connects -->
-  <div class="actions" id="actions">
-    <p id="conn-info"></p>
-    <div class="btn-row">
-      <button class="btn" id="camera-btn">
-        <span class="icon">📷</span>
-        <span class="label">Camera</span>
-      </button>
-      <button class="btn" id="gallery-btn">
-        <span class="icon">🖼️</span>
-        <span class="label">Gallery</span>
-      </button>
+    <span id="file-label"></span>
+
+    <button id="shutter" disabled>
+      <div class="shutter-core">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M9 3L7.17 5H4C2.9 5 2 5.9 2 7v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2h-3.17L15 3H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
+        </svg>
+      </div>
+    </button>
+
+    <div id="action-row">
+      <button id="send-btn">Send Photo</button>
+      <button id="retake-btn">Retake</button>
     </div>
-    <button id="send-btn" disabled>Send Photo →</button>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <script>
   (() => {
     const statusEl    = document.getElementById('status');
-    const cameraBtn   = document.getElementById('camera-btn');
-    const galleryBtn  = document.getElementById('gallery-btn');
+    const statusText  = document.getElementById('status-text');
+    const shutter     = document.getElementById('shutter');
     const sendBtn     = document.getElementById('send-btn');
-    const cameraInput = document.getElementById('camera-input');
-    const galleryInput= document.getElementById('gallery-input');
+    const retakeBtn   = document.getElementById('retake-btn');
+    const camInput    = document.getElementById('camera-input');
     const preview     = document.getElementById('preview');
     const placeholder = document.getElementById('placeholder');
-    const progressW   = document.getElementById('progress-wrap');
-    const progressB   = document.getElementById('progress-bar');
-    const actionsEl   = document.getElementById('actions');
-    const connInfo    = document.getElementById('conn-info');
+    const progWrap    = document.getElementById('prog-wrap');
+    const progBar     = document.getElementById('prog-bar');
+    const actionRow   = document.getElementById('action-row');
+    const fileLabel   = document.getElementById('file-label');
 
     const CHUNK = 16 * 1024;
     let conn, selectedFile;
 
-    function setStatus(text, cls = '') {
-      statusEl.textContent = text;
-      statusEl.className   = cls;
+    function setStatus(text, cls) {
+      statusText.textContent = text;
+      statusEl.className = cls;
     }
 
     const desktopId = new URLSearchParams(location.search).get('id');
-    if (!desktopId) { setStatus('Invalid link — scan QR again', 'error'); return; }
+    if (!desktopId) { setStatus('Invalid link — rescan QR', 'error'); return; }
 
     const ICE = [
-      { urls: 'stun:stun.l.google.com:19302'  },
+      { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun.cloudflare.com:3478' },
       { urls: 'turn:openrelay.metered.ca:80',
@@ -254,66 +319,55 @@
     ];
 
     const peer = new Peer({ config: { iceServers: ICE } });
-
-    peer.on('error', (err) => setStatus(`Error: ${err.type}`, 'error'));
+    peer.on('error', () => setStatus('Error', 'error'));
 
     peer.on('open', () => {
-      setStatus('Calling desktop…', 'spin');
+      setStatus('Calling…', 'connecting');
       conn = peer.connect(desktopId, { reliable: true, serialization: 'binary' });
 
       conn.on('open', () => {
-        // Detect P2P vs relay
-        conn.peerConnection?.getStats().then(stats => {
-          stats.forEach(r => {
-            if (r.type === 'candidate-pair' && r.state === 'succeeded') {
-              const vals  = [...stats.values()];
-              const local = vals.find(s => s.id === r.localCandidateId);
-              const rem   = vals.find(s => s.id === r.remoteCandidateId);
-              if (local && rem) {
-                connInfo.textContent =
-                  (local.candidateType === 'relay' || rem.candidateType === 'relay')
-                    ? '🔄 Relayed (TURN)' : '⚡ Direct P2P';
-              }
-            }
-          });
-        });
-
-        setStatus('Connected', 'ready');
-        actionsEl.style.display = 'flex';
+        setStatus('Connected', 'connected');
+        shutter.disabled = false;
       });
-
-      conn.on('error', () => setStatus('Connection lost — rescan QR', 'error'));
-      conn.on('close',  () => { setStatus('Disconnected', 'error'); actionsEl.style.display = 'none'; });
+      conn.on('error', () => { setStatus('Lost connection', 'error'); shutter.disabled = true; });
+      conn.on('close',  () => { setStatus('Disconnected', 'error');   shutter.disabled = true; });
     });
 
-    // ── File pick ──────────────────────────────────────────────────────────
-    cameraBtn.onclick  = () => cameraInput.click();
-    galleryBtn.onclick = () => galleryInput.click();
+    // ── Capture ──────────────────────────────────────────────────────────────
+    shutter.onclick = () => camInput.click();
 
-    function onFile(file) {
+    retakeBtn.onclick = () => {
+      camInput.value = '';
+      camInput.click();
+    };
+
+    camInput.onchange = (e) => {
+      const file = e.target.files[0];
       if (!file) return;
       selectedFile = file;
+
       const url = URL.createObjectURL(file);
       preview.src           = url;
       preview.style.display = 'block';
       placeholder.style.display = 'none';
-      sendBtn.style.display     = 'block';
-      sendBtn.disabled          = false;
-      sendBtn.textContent       = `Send Photo (${(file.size / 1024).toFixed(0)} KB) →`;
-    }
 
-    cameraInput.onchange  = (e) => onFile(e.target.files[0]);
-    galleryInput.onchange = (e) => onFile(e.target.files[0]);
+      fileLabel.textContent  = `${(file.size / 1024).toFixed(0)} KB`;
+      fileLabel.style.display = 'block';
 
-    // ── Send ───────────────────────────────────────────────────────────────
+      shutter.style.display      = 'none';
+      actionRow.style.display    = 'flex';
+      sendBtn.disabled           = false;
+      sendBtn.textContent        = 'Send Photo';
+    };
+
+    // ── Send ─────────────────────────────────────────────────────────────────
     sendBtn.onclick = async () => {
       if (!selectedFile || !conn?.open) return;
 
-      sendBtn.disabled    = true;
-      cameraBtn.disabled  = true;
-      galleryBtn.disabled = true;
-      progressW.style.display = 'block';
-      progressB.style.width   = '0%';
+      sendBtn.disabled  = true;
+      retakeBtn.disabled = true;
+      progWrap.style.display = 'block';
+      progBar.style.width    = '0%';
       setStatus('Sending…', 'sending');
 
       const buf = await selectedFile.arrayBuffer();
@@ -331,17 +385,16 @@
         const end = Math.min(offset + CHUNK, buf.byteLength);
         conn.send(buf.slice(offset, end));
         offset = end;
-        progressB.style.width = Math.round(offset / buf.byteLength * 100) + '%';
+        progBar.style.width = Math.round(offset / buf.byteLength * 100) + '%';
       }
 
       conn.send(JSON.stringify({ type: 'done', name: selectedFile.name, mime: selectedFile.type }));
 
       setStatus('Sent ✓', 'done');
-      progressW.style.display = 'none';
-      sendBtn.textContent  = 'Send Another →';
-      sendBtn.disabled     = false;
-      cameraBtn.disabled   = false;
-      galleryBtn.disabled  = false;
+      progWrap.style.display = 'none';
+      sendBtn.textContent    = 'Send Another';
+      sendBtn.disabled       = false;
+      retakeBtn.disabled     = false;
     };
   })();
   </script>
