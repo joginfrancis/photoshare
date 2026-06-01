@@ -71,7 +71,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 2rem 2rem 1.5rem;
+      padding: 2rem 2rem 220px; /* bottom pad reserves space for fixed dock; JS refines */
       overflow: hidden;
     }
 
@@ -135,14 +135,19 @@
     }
     #v-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-    /* ── Dock ── */
+    /* ── Dock — fixed, floating above content ── */
     .dock {
-      flex-shrink: 0;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      z-index: 10;
+      background: #fff;
+      box-shadow: 0 -1px 12px #00000010;
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
       padding: 1.25rem 1.5rem;
       padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+      transform-origin: bottom left; /* for zoom compensation */
     }
 
     /* Progress */
@@ -351,9 +356,11 @@
       selectedFile = file;
       preview.src = URL.createObjectURL(file);
 
-      vReady.style.display   = 'none';
-      vPreview.style.display = 'block';
-      stage.style.padding    = '1rem 1.5rem 0.75rem';
+      vReady.style.display    = 'none';
+      vPreview.style.display  = 'block';
+      stage.style.paddingTop  = '1rem';
+      stage.style.paddingLeft = stage.style.paddingRight = '1rem';
+      /* paddingBottom is kept at dock height — managed by syncDock */
 
       captureBtn.style.display = 'none';
       fileSz.style.display     = 'block';
@@ -396,6 +403,29 @@
       sendBtn.disabled       = false;
       retakeBtn.disabled     = false;
     };
+
+    // ── Floating dock: fixed position + zoom-resistant ──────────────────────
+    const dockEl = document.querySelector('.dock');
+
+    function syncDock() {
+      const vv = window.visualViewport;
+      if (!vv) return;
+      const s = vv.scale;
+      // Counteract zoom so the dock keeps its original visual size
+      dockEl.style.transform = `scale(${1 / s})`;
+      // Anchor to the visual viewport (not the layout viewport)
+      dockEl.style.left   = vv.offsetLeft + 'px';
+      dockEl.style.width  = window.innerWidth + 'px';
+      dockEl.style.bottom = Math.max(0, window.innerHeight - vv.offsetTop - vv.height) + 'px';
+      // Keep stage bottom padding == visual dock height so content isn't hidden
+      stage.style.paddingBottom = (dockEl.offsetHeight / s) + 'px';
+    }
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', syncDock);
+      window.visualViewport.addEventListener('scroll', syncDock);
+    }
+    requestAnimationFrame(syncDock); // run once after first paint
   })();
   </script>
 </body>
