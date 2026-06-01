@@ -10,119 +10,140 @@
     body {
       font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
       background: #fff;
-      color: #202124;
+      color: #1a1a1a;
       height: 100dvh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
 
-    /* ── Header ── */
-    header {
+    /* ── Top bar ── */
+    .topbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 1.25rem 1.5rem;
+      padding: 1.1rem 1.5rem;
       flex-shrink: 0;
+      border-bottom: 1px solid #f0f0f0;
     }
-
-    .wordmark {
-      font-size: 1.15rem;
-      font-weight: 500;
-      color: #202124;
-      letter-spacing: -0.01em;
-    }
+    .wordmark { font-size: 1rem; font-weight: 600; color: #888; }
 
     /* ── Status chip ── */
-    #status {
+    #chip {
       display: inline-flex;
       align-items: center;
       gap: 0.45rem;
-      padding: 0.45rem 1rem;
+      padding: 0.38rem 0.9rem;
       border-radius: 100px;
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       font-weight: 500;
-      background: #f1f3f4;
-      color: #5f6368;
+      background: #f4f4f4;
+      color: #999;
       transition: background 0.3s, color 0.3s;
     }
-    .dot {
-      width: 7px; height: 7px;
-      border-radius: 50%;
-      background: #bdc1c6;
-      flex-shrink: 0;
-      transition: background 0.3s;
-    }
+    .dot  { width: 7px; height: 7px; border-radius: 50%; background: #ccc; flex-shrink: 0; }
     .ring {
-      width: 14px; height: 14px;
-      border: 2px solid #dadce0;
+      width: 12px; height: 12px;
+      border: 2px solid #ddd;
       border-top-color: #1a73e8;
       border-radius: 50%;
-      animation: spin 0.75s linear infinite;
+      animation: spin 0.7s linear infinite;
       flex-shrink: 0;
       display: none;
     }
-    #status.connecting .dot  { display: none; }
-    #status.connecting .ring { display: block; }
-    #status.connected  { background: #e6f4ea; color: #137333; }
-    #status.connected  .dot  { background: #34a853; }
-    #status.sending    { background: #e8f0fe; color: #1a73e8; }
-    #status.sending    .dot  { background: #1a73e8; animation: pulse 1s ease-in-out infinite; }
-    #status.done       { background: #e6f4ea; color: #137333; }
-    #status.done       .dot  { background: #34a853; }
-    #status.error      { background: #fce8e6; color: #c5221f; }
-    #status.error      .dot  { background: #ea4335; }
+    #chip.connecting .dot  { display: none; }
+    #chip.connecting .ring { display: block; }
+    #chip.connected  { background: #e6f4ea; color: #1e7e34; }
+    #chip.connected  .dot { background: #34a853; }
+    #chip.sending    { background: #e8f0fe; color: #1a73e8; }
+    #chip.sending    .dot { background: #1a73e8; animation: pulse 1s ease-in-out infinite; }
+    #chip.done       { background: #e6f4ea; color: #1e7e34; }
+    #chip.done       .dot { background: #34a853; }
+    #chip.error      { background: #fce8e6; color: #c5221f; }
+    #chip.error      .dot { background: #ea4335; }
 
     @keyframes spin  { to { transform: rotate(360deg); } }
-    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.35; } }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-    /* ── Preview area ── */
-    .preview-area {
+    /* ── Centre stage ── */
+    .stage {
       flex: 1;
-      position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      background: #f8f9fa;
-    }
-
-    #preview {
-      display: none;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .placeholder {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 1rem;
-      color: #dadce0;
-      user-select: none;
+      justify-content: center;
+      padding: 2rem 2rem 1rem;
+      text-align: center;
+      overflow: hidden;
     }
-    .placeholder svg  { width: 72px; height: 72px; }
-    .placeholder span { font-size: 0.85rem; color: #bdc1c6; }
+
+    /* Connecting view */
+    #v-connecting {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.25rem;
+    }
+    .big-ring {
+      width: 52px; height: 52px;
+      border: 4px solid #eee;
+      border-top-color: #1a73e8;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    #v-connecting p { font-size: 1.05rem; color: #999; }
+
+    /* Ready view */
+    #v-ready {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.25rem;
+    }
+    #v-ready h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1.2;
+      color: #1a1a1a;
+    }
+    #v-ready p {
+      font-size: 1rem;
+      color: #888;
+      line-height: 1.6;
+      max-width: 260px;
+    }
+
+    /* Preview view */
+    #v-preview {
+      display: none;
+      width: 100%;
+      flex: 1;
+      border-radius: 1.25rem;
+      overflow: hidden;
+      box-shadow: 0 2px 16px #0000000f;
+    }
+    #v-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
 
     /* ── Bottom dock ── */
     .dock {
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 1.25rem;
-      padding: 1.75rem 1.5rem;
-      padding-bottom: max(1.75rem, env(safe-area-inset-bottom));
-      background: #fff;
+      gap: 0.65rem;
+      padding: 1.25rem 1.5rem;
+      padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
     }
 
-    /* Progress bar */
+    /* Progress */
     #prog-wrap {
       display: none;
-      width: 100%;
       height: 3px;
-      background: #e8eaed;
+      background: #eee;
       border-radius: 2px;
       overflow: hidden;
     }
@@ -130,132 +151,91 @@
       height: 100%;
       width: 0;
       background: #1a73e8;
-      border-radius: 2px;
       transition: width 0.1s;
     }
 
-    /* File size label */
-    #file-label {
-      display: none;
-      font-size: 0.8rem;
-      color: #9aa0a6;
-      letter-spacing: 0.01em;
-    }
-
-    /* ── Shutter button ── */
-    #shutter {
-      width: 80px; height: 80px;
-      border-radius: 50%;
-      border: 3.5px solid #dadce0;
-      background: #fff;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      -webkit-tap-highlight-color: transparent;
-      transition: transform 0.12s, border-color 0.2s;
-      flex-shrink: 0;
-      box-shadow: 0 1px 4px #0001;
-    }
-    #shutter:active:not(:disabled)  { transform: scale(0.91); }
-    #shutter:disabled { opacity: 0.35; cursor: not-allowed; }
-
-    .shutter-core {
-      width: 62px; height: 62px;
-      border-radius: 50%;
-      background: #202124;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.2s;
-    }
-    #shutter:not(:disabled):active .shutter-core { background: #1a73e8; }
-    .shutter-core svg { width: 30px; height: 30px; fill: #fff; }
-
-    /* ── Send / retake row ── */
-    #action-row {
-      display: none;
+    /* Primary blue button */
+    .btn-primary {
       width: 100%;
-      gap: 0.75rem;
-      flex-direction: column;
-    }
-
-    #send-btn {
-      width: 100%;
-      min-height: 56px;
+      min-height: 58px;
       border: none;
       border-radius: 100px;
       background: #1a73e8;
       color: #fff;
-      font-size: 1rem;
-      font-weight: 500;
+      font-size: 1.1rem;
+      font-weight: 600;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
       letter-spacing: 0.01em;
-      transition: background 0.15s, transform 0.1s;
       -webkit-tap-highlight-color: transparent;
+      transition: transform 0.1s, background 0.15s;
     }
-    #send-btn:active:not(:disabled) { background: #1558d6; transform: scale(0.98); }
-    #send-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary svg { width: 22px; height: 22px; fill: #fff; flex-shrink: 0; }
+    .btn-primary:active:not(:disabled) { transform: scale(0.97); background: #1558d6; }
+    .btn-primary:disabled { opacity: 0.38; cursor: not-allowed; }
 
-    #retake-btn {
+    /* Ghost button */
+    .btn-ghost {
       width: 100%;
-      min-height: 44px;
+      min-height: 46px;
       border: none;
-      border-radius: 100px;
       background: transparent;
-      color: #5f6368;
-      font-size: 0.9rem;
-      font-weight: 500;
+      color: #1a73e8;
+      font-size: 0.95rem;
+      font-weight: 600;
       cursor: pointer;
-      letter-spacing: 0.01em;
       -webkit-tap-highlight-color: transparent;
+      transition: opacity 0.1s;
     }
-    #retake-btn:active { opacity: 0.6; }
+    .btn-ghost:active { opacity: 0.6; }
 
-    /* ── Media queries ── */
+    /* Responsive scaling */
     @media (min-height: 700px) {
-      #shutter { width: 96px; height: 96px; }
-      .shutter-core { width: 76px; height: 76px; }
-      .shutter-core svg { width: 36px; height: 36px; }
-      .dock { gap: 1.5rem; padding: 2rem 1.5rem; padding-bottom: max(2rem, env(safe-area-inset-bottom)); }
-      #send-btn { min-height: 60px; font-size: 1.05rem; }
+      .btn-primary { min-height: 64px; font-size: 1.15rem; }
+      #v-ready h1  { font-size: 2.25rem; }
+      .dock        { padding: 1.5rem 1.75rem; padding-bottom: max(1.75rem, env(safe-area-inset-bottom)); gap: 0.75rem; }
     }
-
     @media (min-height: 800px) {
-      #shutter { width: 112px; height: 112px; border-width: 4px; }
-      .shutter-core { width: 90px; height: 90px; }
-      .shutter-core svg { width: 42px; height: 42px; }
-      .dock { gap: 1.75rem; padding: 2.25rem 2rem; padding-bottom: max(2.25rem, env(safe-area-inset-bottom)); }
-      header { padding: 1.5rem 2rem; }
-      .placeholder svg { width: 90px; height: 90px; }
+      .btn-primary { min-height: 70px; font-size: 1.2rem; }
+      .btn-primary svg { width: 26px; height: 26px; }
+      #v-ready h1  { font-size: 2.5rem; }
+      #v-ready p   { font-size: 1.05rem; }
+      .dock        { padding: 2rem 2rem; padding-bottom: max(2rem, env(safe-area-inset-bottom)); }
+      .topbar      { padding: 1.25rem 2rem; }
     }
-
     @media (min-width: 400px) {
-      header { padding: 1.5rem 2rem; }
-      .dock { padding-left: 2rem; padding-right: 2rem; }
+      .topbar, .dock { padding-left: 2rem; padding-right: 2rem; }
     }
   </style>
 </head>
 <body>
 
-  <header>
+  <div class="topbar">
     <span class="wordmark">PhotoShare</span>
-    <div id="status" class="connecting">
+    <div id="chip" class="connecting">
       <div class="ring"></div>
       <div class="dot"></div>
-      <span id="status-text">Connecting</span>
+      <span id="chip-text">Connecting</span>
     </div>
-  </header>
+  </div>
 
-  <div class="preview-area">
-    <div class="placeholder" id="placeholder">
-      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path d="M9 3L7.17 5H4C2.9 5 2 5.9 2 7v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2h-3.17L15 3H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
-        <circle cx="12" cy="13" r="2.5" opacity=".55"/>
-      </svg>
-      <span>Tap the button to take a photo</span>
+  <div class="stage" id="stage">
+    <div id="v-connecting">
+      <div class="big-ring"></div>
+      <p>Connecting to desktop…</p>
     </div>
-    <img id="preview" alt="">
+
+    <div id="v-ready">
+      <h1>Connected to<br>your desktop</h1>
+      <p>Tap Capture and point your camera at what you want to send</p>
+    </div>
+
+    <div id="v-preview">
+      <img id="preview" alt="">
+    </div>
   </div>
 
   <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
@@ -263,48 +243,51 @@
   <div class="dock">
     <div id="prog-wrap"><div id="prog-bar"></div></div>
 
-    <span id="file-label"></span>
-
-    <button id="shutter" disabled>
-      <div class="shutter-core">
-        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M9 3L7.17 5H4C2.9 5 2 5.9 2 7v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2h-3.17L15 3H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
-        </svg>
-      </div>
+    <button class="btn-primary" id="capture-btn" disabled>
+      <svg viewBox="0 0 24 24"><path d="M9 3L7.17 5H4C2.9 5 2 5.9 2 7v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2h-3.17L15 3H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
+      Capture
     </button>
 
-    <div id="action-row">
-      <button id="send-btn">Send Photo</button>
-      <button id="retake-btn">Retake</button>
-    </div>
+    <button class="btn-primary" id="send-btn" style="display:none" disabled>
+      Send Photo
+    </button>
+
+    <button class="btn-ghost" id="retake-btn" style="display:none">
+      Retake
+    </button>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <script>
   (() => {
-    const statusEl    = document.getElementById('status');
-    const statusText  = document.getElementById('status-text');
-    const shutter     = document.getElementById('shutter');
+    const chip        = document.getElementById('chip');
+    const chipText    = document.getElementById('chip-text');
+    const vConnecting = document.getElementById('v-connecting');
+    const vReady      = document.getElementById('v-ready');
+    const vPreview    = document.getElementById('v-preview');
+    const preview     = document.getElementById('preview');
+    const captureBtn  = document.getElementById('capture-btn');
     const sendBtn     = document.getElementById('send-btn');
     const retakeBtn   = document.getElementById('retake-btn');
     const camInput    = document.getElementById('camera-input');
-    const preview     = document.getElementById('preview');
-    const placeholder = document.getElementById('placeholder');
     const progWrap    = document.getElementById('prog-wrap');
     const progBar     = document.getElementById('prog-bar');
-    const actionRow   = document.getElementById('action-row');
-    const fileLabel   = document.getElementById('file-label');
+    const stage       = document.getElementById('stage');
 
     const CHUNK = 16 * 1024;
     let conn, selectedFile;
 
-    function setStatus(text, cls) {
-      statusText.textContent = text;
-      statusEl.className = cls;
+    function setChip(text, cls) {
+      chipText.textContent = text;
+      chip.className = cls;
     }
 
     const desktopId = new URLSearchParams(location.search).get('id');
-    if (!desktopId) { setStatus('Invalid link — rescan QR', 'error'); return; }
+    if (!desktopId) {
+      setChip('Invalid link', 'error');
+      vConnecting.querySelector('p').textContent = 'Rescan the QR code.';
+      return;
+    }
 
     const ICE = [
       { urls: 'stun:stun.l.google.com:19302' },
@@ -319,59 +302,51 @@
     ];
 
     const peer = new Peer({ config: { iceServers: ICE } });
-    peer.on('error', () => setStatus('Error', 'error'));
+    peer.on('error', () => setChip('Error', 'error'));
 
     peer.on('open', () => {
-      setStatus('Calling…', 'connecting');
+      setChip('Calling…', 'connecting');
       conn = peer.connect(desktopId, { reliable: true, serialization: 'binary' });
 
       conn.on('open', () => {
-        setStatus('Connected', 'connected');
-        shutter.disabled = false;
+        setChip('Connected', 'connected');
+        vConnecting.style.display = 'none';
+        vReady.style.display      = 'flex';
+        captureBtn.disabled       = false;
       });
-      conn.on('error', () => { setStatus('Lost connection', 'error'); shutter.disabled = true; });
-      conn.on('close',  () => { setStatus('Disconnected', 'error');   shutter.disabled = true; });
+      conn.on('error', () => { setChip('Lost', 'error'); captureBtn.disabled = true; });
+      conn.on('close',  () => { setChip('Disconnected', 'error'); captureBtn.disabled = true; });
     });
 
-    // ── Capture ──────────────────────────────────────────────────────────────
-    shutter.onclick = () => camInput.click();
-
-    retakeBtn.onclick = () => {
-      camInput.value = '';
-      camInput.click();
-    };
+    captureBtn.onclick = () => camInput.click();
+    retakeBtn.onclick  = () => { camInput.value = ''; camInput.click(); };
 
     camInput.onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
       selectedFile = file;
+      preview.src = URL.createObjectURL(file);
 
-      const url = URL.createObjectURL(file);
-      preview.src           = url;
-      preview.style.display = 'block';
-      placeholder.style.display = 'none';
+      vReady.style.display    = 'none';
+      vPreview.style.display  = 'block';
+      stage.style.padding     = '1rem 1.5rem 0.5rem';
 
-      fileLabel.textContent  = `${(file.size / 1024).toFixed(0)} KB`;
-      fileLabel.style.display = 'block';
-
-      shutter.style.display      = 'none';
-      actionRow.style.display    = 'flex';
-      sendBtn.disabled           = false;
-      sendBtn.textContent        = 'Send Photo';
+      captureBtn.style.display = 'none';
+      sendBtn.style.display    = 'block';
+      retakeBtn.style.display  = 'block';
+      sendBtn.disabled         = false;
+      sendBtn.textContent      = `Send Photo  ·  ${(file.size / 1024).toFixed(0)} KB`;
     };
 
-    // ── Send ─────────────────────────────────────────────────────────────────
     sendBtn.onclick = async () => {
       if (!selectedFile || !conn?.open) return;
-
-      sendBtn.disabled  = true;
+      sendBtn.disabled   = true;
       retakeBtn.disabled = true;
       progWrap.style.display = 'block';
       progBar.style.width    = '0%';
-      setStatus('Sending…', 'sending');
+      setChip('Sending…', 'sending');
 
       const buf = await selectedFile.arrayBuffer();
-
       conn.send(JSON.stringify({
         type: 'meta', name: selectedFile.name,
         size: buf.byteLength, mime: selectedFile.type,
@@ -387,10 +362,9 @@
         offset = end;
         progBar.style.width = Math.round(offset / buf.byteLength * 100) + '%';
       }
-
       conn.send(JSON.stringify({ type: 'done', name: selectedFile.name, mime: selectedFile.type }));
 
-      setStatus('Sent ✓', 'done');
+      setChip('Sent ✓', 'done');
       progWrap.style.display = 'none';
       sendBtn.textContent    = 'Send Another';
       sendBtn.disabled       = false;
