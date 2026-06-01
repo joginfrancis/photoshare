@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PhotoShare</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #111;
+      color: #f0f0f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      gap: 1.5rem;
+    }
+    h1   { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; }
+    .sub { color: #555; font-size: 0.85rem; }
+
+    #status {
+      font-size: 0.9rem;
+      padding: 0.45rem 1.1rem;
+      border-radius: 2rem;
+      background: #1e1e1e;
+      color: #aaa;
+      transition: background 0.3s, color 0.3s;
+    }
+    #status.ready    { background: #0f2a1a; color: #4ade80; }
+    #status.error    { background: #2a0f0f; color: #f87171; }
+    #status.incoming { background: #0f1e2a; color: #60a5fa; }
+    #status.spin::before {
+      content: '⟳ ';
+      display: inline-block;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* QR box */
+    #qr-wrap {
+      display: none;
+      background: #fff;
+      border-radius: 1rem;
+      padding: 1rem;
+      box-shadow: 0 0 0 4px #222;
+    }
+    #qr-img { display: block; width: 240px; height: 240px; }
+
+    #url-label {
+      display: none;
+      font-size: 0.68rem;
+      color: #444;
+      max-width: 280px;
+      word-break: break-all;
+      text-align: center;
+    }
+
+    /* How-it-works badge */
+    #info {
+      display: none;
+      font-size: 0.75rem;
+      color: #555;
+      text-align: center;
+      max-width: 280px;
+      line-height: 1.5;
+    }
+
+    /* Received photo */
+    #photo-section {
+      display: none;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.75rem;
+      width: 100%;
+      max-width: 560px;
+    }
+    #photo-meta  { font-size: 0.8rem; color: #666; }
+    #progress-wrap {
+      width: 100%; height: 8px;
+      background: #222; border-radius: 4px;
+      overflow: hidden; display: none;
+    }
+    #progress-bar { height: 100%; width: 0; background: #4ade80; transition: width 0.1s; }
+    #photo-out   {
+      display: none; width: 100%;
+      border-radius: 0.75rem;
+      box-shadow: 0 4px 24px #0009;
+    }
+    #dl-btn {
+      display: none;
+      padding: 0.65rem 1.75rem;
+      background: #4ade80; color: #000;
+      font-weight: 700; font-size: 0.95rem;
+      border: none; border-radius: 0.5rem; cursor: pointer;
+    }
+    #dl-btn:hover { background: #22c55e; }
+  </style>
+</head>
+<body>
+  <h1>PhotoShare</h1>
+  <p class="sub">Scan with your phone to send a photo — no app, no cables</p>
+
+  <div id="status" class="spin">Connecting to signaling server…</div>
+
+  <div id="qr-wrap"><img id="qr-img" alt="QR Code"></div>
+  <p id="url-label"></p>
+  <p id="info">🔒 End-to-end encrypted · Direct P2P · No file size limit</p>
+
+  <div id="photo-section">
+    <p id="photo-meta"></p>
+    <div id="progress-wrap"><div id="progress-bar"></div></div>
+    <img id="photo-out" alt="Received photo">
+    <button id="dl-btn">⬇ Download</button>
+  </div>
+
+  <!-- PeerJS — handles all WebRTC signaling without a server you run -->
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <script>
+  (() => {
+    const statusEl  = document.getElementById('status');
+    const qrWrap    = document.getElementById('qr-wrap');
+    const qrImg     = document.getElementById('qr-img');
+    const urlLabel  = document.getElementById('url-label');
+    const infoEl    = document.getElementById('info');
+    const photoSect = document.getElementById('photo-section');
+    const photoMeta = document.getElementById('photo-meta');
+    const progressW = document.getElementById('progress-wrap');
+    const progressB = document.getElementById('progress-bar');
+    const photoOut  = document.getElementById('photo-out');
+    const dlBtn     = document.getElementById('dl-btn');
+
+    function setStatus(text, cls = '') {
+      statusEl.textContent = text;
+      statusEl.className   = cls;
+    }
+
+    // ── ICE servers: STUN (free) + TURN (free relay for CGNAT/4G) ──────────
+    //
+    //  WHY TURN?
+    //  Mobile carriers (4G/5G) use CGNAT — many phones share one public IP.
+    //  WebRTC can't punch through this with STUN alone.
+    //  TURN relays the data through a server as a fallback.
+    //  openrelay.metered.ca is a free, public TURN server.
+
+    const ICE = [
+      { urls: 'stun:stun.l.google.com:19302'  },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' },
+      // Free TURN relay — handles 4G/CGNAT
+      { urls: 'turn:openrelay.metered.ca:80',
+        username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443',
+        username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+        username: 'openrelayproject', credential: 'openrelayproject' },
+    ];
+
+    // ── Create a Peer on PeerJS's free public signaling server ─────────────
+    //
+    //  PeerJS gives this browser a random ID (e.g. "a3f9bc2").
+    //  We embed that ID in the phone URL so the phone knows who to call.
+    //  The actual data (your photo) goes P2P — PeerJS only passes the
+    //  SDP offer/answer (~200 bytes of negotiation text).
+
+    const peer = new Peer({ config: { iceServers: ICE } });
+
+    peer.on('error', (err) => {
+      console.error(err);
+      setStatus(`PeerJS error: ${err.type}`, 'error');
+    });
+
+    peer.on('open', (myId) => {
+      // Build phone URL — could be file:// in dev or https:// on GitHub Pages
+      const base     = location.href.replace(/\/?(?:index\.html)?$/, '');
+      const phoneUrl = `${base}/mobile.html?id=${myId}`;
+
+      // QR code via qrserver.com API — no library needed, just an <img> src
+      qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=10&data=${encodeURIComponent(phoneUrl)}`;
+      qrImg.onerror = () => {
+        // Fallback if qrserver.com is offline
+        qrImg.alt = '⚠ QR unavailable — open URL below on your phone';
+      };
+
+      qrWrap.style.display   = 'block';
+      urlLabel.textContent   = phoneUrl;
+      urlLabel.style.display = 'block';
+      infoEl.style.display   = 'block';
+      setStatus('Scan the QR code with your phone', 'ready');
+    });
+
+    // ── Accept incoming connection from phone ───────────────────────────────
+    peer.on('connection', (conn) => {
+      setStatus('Phone connected — waiting for photo…', 'incoming');
+
+      let meta  = null;
+      let chunks = [];
+      let received = 0;
+
+      conn.on('data', (data) => {
+        if (typeof data === 'string') {
+          const msg = JSON.parse(data);
+
+          if (msg.type === 'meta') {
+            meta     = msg;
+            chunks   = [];
+            received = 0;
+            photoSect.style.display    = 'flex';
+            progressW.style.display    = 'block';
+            progressB.style.width      = '0%';
+            photoOut.style.display     = 'none';
+            dlBtn.style.display        = 'none';
+            photoMeta.textContent      = `${msg.name}  ·  ${(msg.size / 1024).toFixed(0)} KB`;
+            setStatus(`Receiving "${msg.name}"…`, 'incoming');
+
+          } else if (msg.type === 'done') {
+            const blob = new Blob(chunks, { type: meta?.mime || 'image/jpeg' });
+            const url  = URL.createObjectURL(blob);
+            photoOut.src           = url;
+            photoOut.style.display = 'block';
+            progressW.style.display = 'none';
+            dlBtn.style.display    = 'inline-block';
+            dlBtn.onclick = () => {
+              const a = document.createElement('a');
+              a.href = url; a.download = meta?.name || 'photo.jpg'; a.click();
+            };
+            setStatus('Photo received! ✓', 'ready');
+          }
+
+        } else {
+          // Binary chunk
+          chunks.push(data);
+          received += data.byteLength;
+          if (meta?.size) {
+            progressB.style.width = Math.min(100, received / meta.size * 100).toFixed(1) + '%';
+          }
+        }
+      });
+
+      conn.on('error', (e) => setStatus('Connection error: ' + e, 'error'));
+      conn.on('close', ()  => setStatus('Phone disconnected — scan QR again', 'error'));
+    });
+  })();
+  </script>
+</body>
+</html>

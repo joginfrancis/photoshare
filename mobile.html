@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>PhotoShare – Send</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #111;
+      color: #f0f0f0;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1.5rem;
+      gap: 1.25rem;
+      text-align: center;
+    }
+    h1   { font-size: 1.6rem; font-weight: 700; }
+    .sub { color: #666; font-size: 0.88rem; }
+
+    #status {
+      font-size: 0.9rem;
+      padding: 0.4rem 1.1rem;
+      border-radius: 2rem;
+      background: #1e1e1e;
+      color: #aaa;
+      transition: all 0.3s;
+    }
+    #status.ready    { background: #0f2a1a; color: #4ade80; }
+    #status.error    { background: #2a0f0f; color: #f87171; }
+    #status.sending  { background: #0f1e2a; color: #60a5fa; }
+    #status.done     { background: #0f2a1a; color: #4ade80; }
+    #status.spin::before {
+      content: '⟳ ';
+      display: inline-block;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #preview {
+      width: 100%; max-width: 320px;
+      border-radius: 1rem; display: none;
+      box-shadow: 0 4px 24px #0009;
+      object-fit: cover;
+    }
+    .btn {
+      width: 100%; max-width: 320px;
+      padding: 1rem; border: none;
+      border-radius: 0.85rem;
+      font-size: 1.05rem; font-weight: 700;
+      cursor: pointer; transition: opacity 0.2s;
+    }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    #pick-btn { background: #3b82f6; color: #fff; display: none; }
+    #send-btn { background: #4ade80; color: #000; display: none; }
+
+    #progress-wrap {
+      width: 100%; max-width: 320px;
+      height: 8px; background: #222;
+      border-radius: 4px; overflow: hidden; display: none;
+    }
+    #progress-bar { height: 100%; width: 0; background: #4ade80; transition: width 0.1s; }
+    #conn-info { font-size: 0.72rem; color: #444; max-width: 300px; }
+  </style>
+</head>
+<body>
+  <h1>PhotoShare</h1>
+  <p class="sub">Send a photo directly to the desktop</p>
+
+  <div id="status" class="spin">Connecting…</div>
+
+  <img id="preview" alt="Selected photo">
+  <input type="file" id="file-input" accept="image/*" style="display:none">
+  <button class="btn" id="pick-btn">📷  Choose / Take Photo</button>
+  <button class="btn" id="send-btn" disabled>Send Photo</button>
+  <div id="progress-wrap"><div id="progress-bar"></div></div>
+  <p id="conn-info"></p>
+
+  <!-- PeerJS — same library the desktop uses -->
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <script>
+  (() => {
+    const statusEl  = document.getElementById('status');
+    const pickBtn   = document.getElementById('pick-btn');
+    const sendBtn   = document.getElementById('send-btn');
+    const fileInput = document.getElementById('file-input');
+    const preview   = document.getElementById('preview');
+    const progressW = document.getElementById('progress-wrap');
+    const progressB = document.getElementById('progress-bar');
+    const connInfo  = document.getElementById('conn-info');
+
+    const CHUNK = 16 * 1024;   // 16 KB per chunk
+
+    function setStatus(text, cls = '') {
+      statusEl.textContent = text;
+      statusEl.className   = cls;
+    }
+
+    // Get the desktop's peer ID from the URL
+    const desktopId = new URLSearchParams(location.search).get('id');
+    if (!desktopId) { setStatus('Invalid link — scan the QR code again', 'error'); return; }
+
+    // ── ICE (same list as desktop) ──────────────────────────────────────────
+    const ICE = [
+      { urls: 'stun:stun.l.google.com:19302'  },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' },
+      { urls: 'turn:openrelay.metered.ca:80',
+        username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443',
+        username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+        username: 'openrelayproject', credential: 'openrelayproject' },
+    ];
+
+    // ── Create our own peer then call the desktop ───────────────────────────
+    const peer = new Peer({ config: { iceServers: ICE } });
+    let conn, selectedFile;
+
+    peer.on('error', (err) => setStatus(`Error: ${err.type}`, 'error'));
+
+    peer.on('open', () => {
+      setStatus('Calling desktop…', 'spin');
+
+      // reliable:true = ordered, guaranteed delivery (like TCP) — good for files
+      conn = peer.connect(desktopId, { reliable: true, serialization: 'binary' });
+
+      conn.on('open', () => {
+        // Detect relay vs direct (informational only)
+        const pc = conn.peerConnection;
+        pc?.getStats().then(stats => {
+          stats.forEach(r => {
+            if (r.type === 'candidate-pair' && r.state === 'succeeded') {
+              const local  = [...stats.values()].find(s => s.id === r.localCandidateId);
+              const remote = [...stats.values()].find(s => s.id === r.remoteCandidateId);
+              if (local && remote) {
+                const mode = local.candidateType === 'relay' || remote.candidateType === 'relay'
+                  ? '🔄 Relayed (TURN)' : '⚡ Direct P2P';
+                connInfo.textContent = mode;
+              }
+            }
+          });
+        });
+
+        setStatus('Connected! Choose a photo', 'ready');
+        pickBtn.style.display = 'block';
+      });
+
+      conn.on('error', (e) => setStatus('Connection error — try again', 'error'));
+      conn.on('close', ()  => { setStatus('Disconnected', 'error'); pickBtn.style.display = 'none'; });
+    });
+
+    // ── File selection ──────────────────────────────────────────────────────
+    pickBtn.onclick = () => fileInput.click();
+
+    fileInput.onchange = ({ target }) => {
+      const file = target.files[0];
+      if (!file) return;
+      selectedFile          = file;
+      preview.src           = URL.createObjectURL(file);
+      preview.style.display = 'block';
+      sendBtn.style.display = 'block';
+      sendBtn.disabled      = false;
+      sendBtn.textContent   = 'Send Photo';
+    };
+
+    // ── Send file in 16 KB chunks with back-pressure ────────────────────────
+    //
+    //  WHY CHUNKS?
+    //  The WebRTC data channel has a ~256 KB send buffer.
+    //  Sending a 5 MB photo as one blob would overflow it.
+    //  We split into 16 KB pieces and pause if the buffer fills up.
+
+    sendBtn.onclick = async () => {
+      if (!selectedFile || !conn || conn.open === false) return;
+
+      sendBtn.disabled = true;
+      pickBtn.disabled = true;
+      progressW.style.display = 'block';
+      progressB.style.width   = '0%';
+      setStatus('Sending…', 'sending');
+
+      const buf = await selectedFile.arrayBuffer();
+
+      // Tell desktop what's coming
+      conn.send(JSON.stringify({
+        type: 'meta',
+        name: selectedFile.name,
+        size: buf.byteLength,
+        mime: selectedFile.type,
+      }));
+
+      // Send in chunks, pausing if the underlying data channel buffer is full
+      const dc = conn.dataChannel;
+      let offset = 0;
+
+      while (offset < buf.byteLength) {
+        // Back-pressure: wait if buffer is over 512 KB
+        while (dc && dc.bufferedAmount > 512 * 1024) {
+          await new Promise(r => setTimeout(r, 20));
+        }
+        const end   = Math.min(offset + CHUNK, buf.byteLength);
+        conn.send(buf.slice(offset, end));
+        offset = end;
+        progressB.style.width = Math.round(offset / buf.byteLength * 100) + '%';
+      }
+
+      conn.send(JSON.stringify({ type: 'done' }));
+
+      setStatus('Sent! ✓', 'done');
+      progressW.style.display = 'none';
+      sendBtn.textContent = 'Send Another';
+      sendBtn.disabled    = false;
+      pickBtn.disabled    = false;
+    };
+  })();
+  </script>
+</body>
+</html>
