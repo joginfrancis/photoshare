@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>PhotoShare</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -15,6 +15,8 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
     }
 
     /* ── Top bar ── */
@@ -22,20 +24,20 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 1rem 1.5rem;
+      padding: 0.9rem 1.5rem;
       flex-shrink: 0;
       border-bottom: 1px solid #f0f0f0;
     }
-    .wordmark { font-size: 1rem; font-weight: 600; color: #aaa; }
+    .wordmark { font-size: 1.15rem; font-weight: 700; color: #bbb; }
 
     /* ── Status chip ── */
     #chip {
       display: inline-flex;
       align-items: center;
       gap: 0.45rem;
-      padding: 0.4rem 1rem;
+      padding: 0.45rem 1rem;
       border-radius: 100px;
-      font-size: 0.82rem;
+      font-size: 0.95rem;
       font-weight: 600;
       background: #f4f4f4;
       color: #999;
@@ -44,8 +46,7 @@
     .dot  { width: 8px; height: 8px; border-radius: 50%; background: #ccc; flex-shrink: 0; }
     .ring {
       width: 14px; height: 14px;
-      border: 2.5px solid #ddd;
-      border-top-color: #1a73e8;
+      border: 2.5px solid #ddd; border-top-color: #1a73e8;
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
       flex-shrink: 0; display: none;
@@ -71,8 +72,10 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 2rem 2rem 220px; /* bottom pad reserves space for fixed dock; JS refines */
+      padding: 2rem 1.5rem;
+      /* paddingBottom set by JS = dock height */
       overflow: hidden;
+      text-align: center;
     }
 
     /* Connecting */
@@ -80,48 +83,45 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 1.5rem;
-      text-align: center;
+      gap: 1.75rem;
     }
     .big-ring {
-      width: 56px; height: 56px;
-      border: 4px solid #eee;
-      border-top-color: #1a73e8;
+      width: 64px; height: 64px;
+      border: 5px solid #eee; border-top-color: #1a73e8;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
-    #v-connecting h2 { font-size: 1.4rem; font-weight: 600; color: #333; }
-    #v-connecting p  { font-size: 0.95rem; color: #aaa; }
+    #v-connecting h2 { font-size: 2.2rem; font-weight: 700; color: #333; }
+    #v-connecting p  { font-size: 1.3rem; color: #aaa; }
 
     /* Ready */
     #v-ready {
       display: none;
       flex-direction: column;
       align-items: center;
-      gap: 1.5rem;
-      text-align: center;
+      gap: 2rem;
     }
     .ready-icon {
-      width: 130px; height: 130px;
-      background: #f0f4ff;
+      width: 180px; height: 180px;
+      background: #eff4ff;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
     }
-    .ready-icon svg { width: 64px; height: 64px; fill: #1a73e8; }
+    .ready-icon svg { width: 90px; height: 90px; fill: #1a73e8; }
     #v-ready h1 {
-      font-size: 2rem;
-      font-weight: 700;
-      line-height: 1.2;
+      font-size: 2.8rem;
+      font-weight: 800;
+      line-height: 1.15;
       color: #1a1a1a;
     }
     #v-ready p {
-      font-size: 1rem;
-      color: #999;
+      font-size: 1.3rem;
+      color: #888;
       line-height: 1.6;
-      max-width: 280px;
+      max-width: 300px;
     }
 
     /* Preview */
@@ -132,35 +132,32 @@
       border-radius: 1.25rem;
       overflow: hidden;
       box-shadow: 0 4px 24px #00000014;
+      min-height: 0;
     }
     #v-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-    /* ── Dock — fixed, floating above content ── */
+    /* ── Fixed floating dock ── */
     .dock {
       position: fixed;
       bottom: 0; left: 0; right: 0;
-      z-index: 10;
+      z-index: 100;
       background: #fff;
       box-shadow: 0 -1px 12px #00000010;
       display: flex;
       flex-direction: column;
-      gap: 0.75rem;
-      padding: 1.25rem 1.5rem;
-      padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
-      transform-origin: bottom left; /* for zoom compensation */
+      gap: 0.6rem;
+      padding: 1rem 1.25rem;
+      padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
     }
 
     /* Progress */
     #prog-wrap {
       display: none;
-      height: 4px;
-      background: #eee;
-      border-radius: 2px;
-      overflow: hidden;
+      height: 4px; background: #eee;
+      border-radius: 2px; overflow: hidden;
     }
     #prog-bar {
-      height: 100%;
-      width: 0;
+      height: 100%; width: 0;
       background: #1a73e8;
       transition: width 0.1s;
     }
@@ -169,71 +166,52 @@
     #file-sz {
       display: none;
       text-align: center;
-      font-size: 0.85rem;
-      font-weight: 500;
+      font-size: 1.2rem;
+      font-weight: 600;
       color: #bbb;
     }
 
-    /* ── Primary button ── */
+    /* ── Blue button ── */
     .btn-blue {
       width: 100%;
-      min-height: 76px;
       border: none;
       border-radius: 100px;
       background: #1a73e8;
       color: #fff;
-      font-size: 6rem;
+      font-size: 2.4rem;
       font-weight: 700;
+      letter-spacing: 0.01em;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.75rem;
-      letter-spacing: 0.01em;
+      gap: 0.55rem;
+      padding: 0.55em 1.2em;
       -webkit-tap-highlight-color: transparent;
       transition: transform 0.1s, background 0.15s;
-      box-shadow: 0 4px 16px #1a73e830;
+      box-shadow: 0 4px 18px #1a73e830;
+      white-space: nowrap;
     }
-    .btn-blue svg { width: 32px; height: 32px; fill: #fff; flex-shrink: 0; }
+    .btn-blue svg {
+      /* icon scales with font */
+      width: 1em; height: 1em;
+      fill: #fff; flex-shrink: 0;
+    }
     .btn-blue:active:not(:disabled) { transform: scale(0.97); background: #1558d6; }
     .btn-blue:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
 
     /* ── Ghost button ── */
     .btn-ghost {
       width: 100%;
-      min-height: 50px;
-      border: none;
-      background: transparent;
+      border: none; background: transparent;
       color: #1a73e8;
-      font-size: 1rem;
+      font-size: 1.5rem;
       font-weight: 600;
+      padding: 0.4em;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
     .btn-ghost:active { opacity: 0.6; }
-
-    /* ── Responsive ── */
-    @media (min-height: 700px) {
-      .ready-icon          { width: 150px; height: 150px; }
-      .ready-icon svg      { width: 76px; height: 76px; }
-      #v-ready h1          { font-size: 2.25rem; }
-      .btn-blue            { min-height: 80px; font-size: 6rem; }
-      .btn-blue svg        { width: 34px; height: 34px; }
-      .dock                { gap: 0.85rem; padding: 1.5rem 1.75rem; padding-bottom: max(1.75rem, env(safe-area-inset-bottom)); }
-    }
-    @media (min-height: 800px) {
-      .ready-icon          { width: 170px; height: 170px; }
-      .ready-icon svg      { width: 86px; height: 86px; }
-      #v-ready h1          { font-size: 2.5rem; }
-      #v-ready p           { font-size: 1.05rem; }
-      .btn-blue            { min-height: 86px; font-size: 6rem; }
-      .btn-blue svg        { width: 36px; height: 36px; }
-      .dock                { padding: 1.75rem 2rem; padding-bottom: max(2rem, env(safe-area-inset-bottom)); }
-      .topbar              { padding: 1.25rem 2rem; }
-    }
-    @media (min-width: 400px) {
-      .topbar, .dock { padding-left: 2rem; padding-right: 2rem; }
-    }
   </style>
 </head>
 <body>
@@ -249,14 +227,12 @@
 
   <div class="stage" id="stage">
 
-    <!-- Connecting -->
     <div id="v-connecting">
       <div class="big-ring"></div>
       <h2>Connecting…</h2>
       <p>Reaching your desktop</p>
     </div>
 
-    <!-- Ready -->
     <div id="v-ready">
       <div class="ready-icon">
         <svg viewBox="0 0 24 24"><path d="M9 3L7.17 5H4C2.9 5 2 5.9 2 7v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2h-3.17L15 3H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
@@ -265,7 +241,6 @@
       <p>Tap the button and point your camera at what you want to send</p>
     </div>
 
-    <!-- Preview -->
     <div id="v-preview">
       <img id="preview" alt="">
     </div>
@@ -274,7 +249,7 @@
 
   <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
 
-  <div class="dock">
+  <div class="dock" id="dock">
     <div id="prog-wrap"><div id="prog-bar"></div></div>
     <span id="file-sz"></span>
 
@@ -283,7 +258,7 @@
       Capture
     </button>
 
-    <button class="btn-blue" id="send-btn"    style="display:none" disabled>Send Photo</button>
+    <button class="btn-blue"  id="send-btn"   style="display:none" disabled>Send Photo</button>
     <button class="btn-ghost" id="retake-btn" style="display:none">Retake</button>
   </div>
 
@@ -304,11 +279,19 @@
     const progBar     = document.getElementById('prog-bar');
     const fileSz      = document.getElementById('file-sz');
     const stage       = document.getElementById('stage');
+    const dockEl      = document.getElementById('dock');
 
     const CHUNK = 16 * 1024;
     let conn, selectedFile;
 
     function setChip(text, cls) { chipText.textContent = text; chip.className = cls; }
+
+    // Keep stage bottom-padding == dock height so content never hides under dock
+    function fitStage() {
+      stage.style.paddingBottom = dockEl.offsetHeight + 'px';
+    }
+    new ResizeObserver(fitStage).observe(dockEl);
+    fitStage();
 
     const desktopId = new URLSearchParams(location.search).get('id');
     if (!desktopId) {
@@ -360,7 +343,6 @@
       vPreview.style.display  = 'block';
       stage.style.paddingTop  = '1rem';
       stage.style.paddingLeft = stage.style.paddingRight = '1rem';
-      /* paddingBottom is kept at dock height — managed by syncDock */
 
       captureBtn.style.display = 'none';
       fileSz.style.display     = 'block';
@@ -403,29 +385,6 @@
       sendBtn.disabled       = false;
       retakeBtn.disabled     = false;
     };
-
-    // ── Floating dock: fixed position + zoom-resistant ──────────────────────
-    const dockEl = document.querySelector('.dock');
-
-    function syncDock() {
-      const vv = window.visualViewport;
-      if (!vv) return;
-      const s = vv.scale;
-      // Counteract zoom so the dock keeps its original visual size
-      dockEl.style.transform = `scale(${1 / s})`;
-      // Anchor to the visual viewport (not the layout viewport)
-      dockEl.style.left   = vv.offsetLeft + 'px';
-      dockEl.style.width  = window.innerWidth + 'px';
-      dockEl.style.bottom = Math.max(0, window.innerHeight - vv.offsetTop - vv.height) + 'px';
-      // Keep stage bottom padding == visual dock height so content isn't hidden
-      stage.style.paddingBottom = (dockEl.offsetHeight / s) + 'px';
-    }
-
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', syncDock);
-      window.visualViewport.addEventListener('scroll', syncDock);
-    }
-    requestAnimationFrame(syncDock); // run once after first paint
   })();
   </script>
 </body>
