@@ -134,7 +134,32 @@
       box-shadow: 0 4px 24px #00000014;
       min-height: 0;
     }
-    #v-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    #v-preview img { width: 100%; height: 100%; object-fit: contain; display: block; background:#f4f4f4; }
+
+    /* ── Live camera viewfinder with framing guide ── */
+    #v-camera {
+      display: none;
+      position: fixed; inset: 0; z-index: 50;
+      background: #000;
+    }
+    #cam { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .cam-overlay { position: absolute; inset: 0; pointer-events: none; }
+    /* dim outside the frame using a big transparent-centre box-shadow */
+    .cam-frame {
+      position: absolute; top: 14%; left: 7%; right: 7%; bottom: 22%;
+      border-radius: 14px;
+      box-shadow: 0 0 0 100vmax rgba(0,0,0,0.45);
+    }
+    .cnr { position: absolute; width: 30px; height: 30px; border: 3px solid #fff; }
+    .cnr.tl { top: -2px; left: -2px;  border-right: none; border-bottom: none; border-radius: 12px 0 0 0; }
+    .cnr.tr { top: -2px; right: -2px; border-left:  none; border-bottom: none; border-radius: 0 12px 0 0; }
+    .cnr.bl { bottom: -2px; left: -2px;  border-right: none; border-top: none; border-radius: 0 0 0 12px; }
+    .cnr.br { bottom: -2px; right: -2px; border-left:  none; border-top: none; border-radius: 0 0 12px 0; }
+    .cam-hint {
+      position: absolute; left: 0; right: 0; top: 5%;
+      text-align: center; color: #fff; font-size: 1rem; font-weight: 600;
+      padding: 0 1.5rem; text-shadow: 0 1px 4px rgba(0,0,0,0.6); line-height: 1.4;
+    }
 
     /* ── Fixed floating dock ── */
     .dock {
@@ -238,7 +263,7 @@
         <svg viewBox="0 0 24 24"><path d="M9 3L7.17 5H4C2.9 5 2 5.9 2 7v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2h-3.17L15 3H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
       </div>
       <h1>Ready to capture</h1>
-      <p>Tap the button and point your camera at what you want to send</p>
+      <p>Tap <strong>Capture</strong>, then fit the whole sheet inside the frame — lay it flat, keep all 4 corners visible, avoid shadows.</p>
     </div>
 
     <div id="v-preview">
@@ -247,6 +272,19 @@
 
   </div>
 
+  <!-- Live camera viewfinder with framing guide (primary capture path) -->
+  <div id="v-camera">
+    <video id="cam" playsinline autoplay muted></video>
+    <div class="cam-overlay">
+      <div class="cam-frame">
+        <span class="cnr tl"></span><span class="cnr tr"></span>
+        <span class="cnr bl"></span><span class="cnr br"></span>
+      </div>
+      <p class="cam-hint">Fit the whole sheet inside the frame</p>
+    </div>
+  </div>
+
+  <!-- Fallback native picker (used if camera permission is denied) -->
   <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
 
   <div class="dock" id="dock">
@@ -258,8 +296,16 @@
       Capture
     </button>
 
+    <button class="btn-blue"  id="shutter-btn"   style="display:none">
+      <svg viewBox="0 0 24 24"><path d="M9 3L7.17 5H4C2.9 5 2 5.9 2 7v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2h-3.17L15 3H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
+      Take Photo
+    </button>
+    <button class="btn-ghost" id="cancel-btn"   style="display:none">Cancel</button>
+
     <button class="btn-blue"  id="send-btn"   style="display:none" disabled>Send Photo</button>
     <button class="btn-ghost" id="retake-btn" style="display:none">Retake</button>
+
+    <button class="btn-blue"  id="reconnect-btn" style="display:none">Reconnect</button>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -269,11 +315,16 @@
     const chipText    = document.getElementById('chip-text');
     const vConn       = document.getElementById('v-connecting');
     const vReady      = document.getElementById('v-ready');
+    const vCamera     = document.getElementById('v-camera');
     const vPreview    = document.getElementById('v-preview');
+    const cam         = document.getElementById('cam');
     const preview     = document.getElementById('preview');
     const captureBtn  = document.getElementById('capture-btn');
+    const shutterBtn  = document.getElementById('shutter-btn');
+    const cancelBtn   = document.getElementById('cancel-btn');
     const sendBtn     = document.getElementById('send-btn');
     const retakeBtn   = document.getElementById('retake-btn');
+    const reconnectBtn= document.getElementById('reconnect-btn');
     const camInput    = document.getElementById('camera-input');
     const progWrap    = document.getElementById('prog-wrap');
     const progBar     = document.getElementById('prog-bar');
@@ -282,14 +333,29 @@
     const dockEl      = document.getElementById('dock');
 
     const CHUNK = 16 * 1024;
-    let conn, selectedFile;
+    const MAX_EDGE = 2000;   // downscale long edge before sending
+    const JPEG_Q = 0.85;
+    let conn, selectedFile, stream = null;
 
     function setChip(text, cls) { chipText.textContent = text; chip.className = cls; }
+    function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
 
-    // Keep stage bottom-padding == dock height so content never hides under dock
-    function fitStage() {
-      stage.style.paddingBottom = dockEl.offsetHeight + 'px';
+    // Show exactly one stage view + the right dock buttons for a mode.
+    function setMode(mode) {
+      vConn.style.display    = mode === 'connecting' ? 'flex' : 'none';
+      vReady.style.display   = mode === 'ready'      ? 'flex' : 'none';
+      vCamera.style.display  = mode === 'camera'     ? 'block': 'none';
+      vPreview.style.display = mode === 'preview'    ? 'block': 'none';
+
+      captureBtn.style.display   = mode === 'ready'        ? 'flex' : 'none';
+      shutterBtn.style.display   = mode === 'camera'       ? 'flex' : 'none';
+      cancelBtn.style.display    = mode === 'camera'       ? 'block': 'none';
+      sendBtn.style.display      = mode === 'preview'      ? 'block': 'none';
+      retakeBtn.style.display    = mode === 'preview'      ? 'block': 'none';
+      reconnectBtn.style.display = mode === 'disconnected' ? 'flex' : 'none';
     }
+
+    function fitStage() { stage.style.paddingBottom = dockEl.offsetHeight + 'px'; }
     new ResizeObserver(fitStage).observe(dockEl);
     fitStage();
 
@@ -315,43 +381,83 @@
 
     const peer = new Peer({ config: { iceServers: ICE } });
     peer.on('error', () => setChip('Error', 'error'));
+    peer.on('open', connectToDesktop);
 
-    peer.on('open', () => {
+    function connectToDesktop() {
       setChip('Calling…', 'connecting');
+      setMode('connecting');
       conn = peer.connect(desktopId, { reliable: true, serialization: 'binary' });
+      conn.on('open', () => { setChip('Connected', 'connected'); setMode('ready'); captureBtn.disabled = false; });
+      conn.on('error', () => onDrop('Lost'));
+      conn.on('close',  () => onDrop('Disconnected'));
+    }
+    function onDrop(label) { setChip(label, 'error'); stopCamera(); setMode('disconnected'); }
 
-      conn.on('open', () => {
-        setChip('Connected', 'connected');
-        vConn.style.display  = 'none';
-        vReady.style.display = 'flex';
-        captureBtn.disabled  = false;
-      });
-      conn.on('error', () => { setChip('Lost', 'error'); captureBtn.disabled = true; });
-      conn.on('close',  () => { setChip('Disconnected', 'error'); captureBtn.disabled = true; });
-    });
+    reconnectBtn.onclick = () => {
+      setChip('Reconnecting…', 'connecting');
+      if (peer.disconnected) { peer.reconnect(); peer.once('open', connectToDesktop); }
+      else connectToDesktop();
+    };
 
-    captureBtn.onclick = () => camInput.click();
-    retakeBtn.onclick  = () => { camInput.value = ''; camInput.click(); };
+    // ── Live camera capture (with native picker fallback) ──
+    async function startCamera() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { camInput.value = ''; camInput.click(); return; }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 2560 }, height: { ideal: 1440 } },
+          audio: false,
+        });
+        cam.srcObject = stream;
+        await cam.play();
+        setMode('camera');
+      } catch (e) {
+        camInput.value = ''; camInput.click(); // permission denied → native camera
+      }
+    }
+    function stopCamera() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } cam.srcObject = null; }
 
+    captureBtn.onclick = startCamera;
+    cancelBtn.onclick  = () => { stopCamera(); setMode('ready'); };
+    retakeBtn.onclick  = startCamera;
+
+    shutterBtn.onclick = () => {
+      const vw = cam.videoWidth, vh = cam.videoHeight;
+      if (!vw || !vh) return;
+      buzz(15);
+      const scale = Math.min(1, MAX_EDGE / Math.max(vw, vh));
+      const cw = Math.round(vw * scale), ch = Math.round(vh * scale);
+      const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+      c.getContext('2d').drawImage(cam, 0, 0, cw, ch);
+      c.toBlob(blob => { stopCamera(); usePhoto(blob, 'photo.jpg'); }, 'image/jpeg', JPEG_Q);
+    };
+
+    // Native fallback: downscale the picked file to keep transfers fast.
     camInput.onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      selectedFile = file;
-      preview.src = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+        const cw = Math.round(img.naturalWidth * scale), ch = Math.round(img.naturalHeight * scale);
+        const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+        c.getContext('2d').drawImage(img, 0, 0, cw, ch);
+        c.toBlob(blob => usePhoto(blob || file, file.name || 'photo.jpg'), 'image/jpeg', JPEG_Q);
+      };
+      img.onerror = () => usePhoto(file, file.name || 'photo.jpg');
+      img.src = URL.createObjectURL(file);
+    };
 
-      vReady.style.display    = 'none';
-      vPreview.style.display  = 'block';
+    function usePhoto(blob, name) {
+      selectedFile = new File([blob], name, { type: blob.type || 'image/jpeg' });
+      preview.src = URL.createObjectURL(selectedFile);
       stage.style.paddingTop  = '1rem';
       stage.style.paddingLeft = stage.style.paddingRight = '1rem';
-
-      captureBtn.style.display = 'none';
-      fileSz.style.display     = 'block';
-      fileSz.textContent       = (file.size / 1024).toFixed(0) + ' KB';
-      sendBtn.style.display    = 'block';
-      retakeBtn.style.display  = 'block';
-      sendBtn.disabled         = false;
-      sendBtn.textContent      = 'Send Photo';
-    };
+      fileSz.style.display = 'block';
+      fileSz.textContent   = (selectedFile.size / 1024).toFixed(0) + ' KB';
+      sendBtn.disabled     = false;
+      sendBtn.textContent  = 'Send Photo';
+      setMode('preview');
+    }
 
     sendBtn.onclick = async () => {
       if (!selectedFile || !conn?.open) return;
@@ -379,6 +485,7 @@
       }
       conn.send(JSON.stringify({ type: 'done', name: selectedFile.name, mime: selectedFile.type }));
 
+      buzz([20, 40, 20]);
       setChip('Sent ✓', 'done');
       progWrap.style.display = 'none';
       sendBtn.textContent    = 'Send Another';
