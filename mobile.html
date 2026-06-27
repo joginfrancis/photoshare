@@ -143,6 +143,8 @@
       background: #000;
     }
     #cam { width: 100%; height: 100%; object-fit: cover; display: block; }
+    /* Detection overlay shares the video's aspect + object-fit so the quad stays aligned */
+    #detect-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
     .cam-overlay { position: absolute; inset: 0; pointer-events: none; }
     /* dim outside the frame using a big transparent-centre box-shadow */
     .cam-frame {
@@ -275,12 +277,13 @@
   <!-- Live camera viewfinder with framing guide (primary capture path) -->
   <div id="v-camera">
     <video id="cam" playsinline autoplay muted></video>
+    <canvas id="detect-canvas"></canvas>
     <div class="cam-overlay">
       <div class="cam-frame">
         <span class="cnr tl"></span><span class="cnr tr"></span>
         <span class="cnr bl"></span><span class="cnr br"></span>
       </div>
-      <p class="cam-hint">Fit the whole sheet inside the frame</p>
+      <p class="cam-hint" id="cam-hint">Fit the whole sheet inside the frame</p>
     </div>
   </div>
 
@@ -332,13 +335,101 @@
     const stage       = document.getElementById('stage');
     const dockEl      = document.getElementById('dock');
 
+    const cam2        = document.getElementById('cam');
+    const detectCanvas= document.getElementById('detect-canvas');
+    const camHint     = document.getElementById('cam-hint');
+
     const CHUNK = 16 * 1024;
     const MAX_EDGE = 2000;   // downscale long edge before sending
     const JPEG_Q = 0.85;
+    const PROC_W = 320;      // detection works on a small downscaled frame
     let conn, selectedFile, stream = null;
+    let detecting = false, lastQuad = null, lastConf = 0, detectBusy = false;
+    let sentCorners = null;  // page corners (captured-image px) attached to the next send
 
     function setChip(text, cls) { chipText.textContent = text; chip.className = cls; }
     function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
+
+    // ── Live page detector (pure JS, in a Web Worker so the camera never janks) ──
+    // Returns the 4 corners of the strongest edge cloud, ordered tl,tr,br,bl.
+    const WORKER_SRC = `
+      self.onmessage = (e) => {
+        const { data, w, h } = e.data;
+        const g = new Float32Array(w * h);
+        for (let i = 0, p = 0; i < w * h; i++, p += 4)
+          g[i] = 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2];
+        // Sobel magnitude
+        const mag = new Float32Array(w * h); let maxM = 0;
+        for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+          const o = y * w + x;
+          const gx = -g[o-w-1]-2*g[o-1]-g[o+w-1]+g[o-w+1]+2*g[o+1]+g[o+w+1];
+          const gy = -g[o-w-1]-2*g[o-w]-g[o-w+1]+g[o+w-1]+2*g[o+w]+g[o+w+1];
+          const m = Math.abs(gx) + Math.abs(gy); mag[o] = m; if (m > maxM) maxM = m;
+        }
+        const thr = maxM * 0.30;
+        // Extreme points of strong edges (ignore a small border) → quad corners
+        let tl=null,tr=null,bl=null,br=null, minS=1e9,maxS=-1e9,minD=1e9,maxD=-1e9, n=0;
+        const b = 3;
+        for (let y = b; y < h - b; y++) for (let x = b; x < w - b; x++) {
+          const o = y * w + x; if (mag[o] < thr) continue;
+          // require a strong neighbour to reject isolated specks
+          if (mag[o-1] < thr && mag[o+1] < thr && mag[o-w] < thr && mag[o+w] < thr) continue;
+          n++;
+          const s = x + y, d = x - y;
+          if (s < minS) { minS = s; tl = [x, y]; }
+          if (s > maxS) { maxS = s; br = [x, y]; }
+          if (d > maxD) { maxD = d; tr = [x, y]; }
+          if (d < minD) { minD = d; bl = [x, y]; }
+        }
+        if (!tl || !tr || !br || !bl || n < 80) { self.postMessage({ quad: null, conf: 0 }); return; }
+        const quad = [tl, tr, br, bl];
+        // shoelace area → confidence as fraction of frame
+        let a = 0; for (let i = 0; i < 4; i++) { const p1 = quad[i], p2 = quad[(i+1)%4]; a += p1[0]*p2[1] - p2[0]*p1[1]; }
+        const area = Math.abs(a) / 2, conf = area / (w * h);
+        self.postMessage({ quad, conf });
+      };
+    `;
+    let detWorker = null;
+    try { detWorker = new Worker(URL.createObjectURL(new Blob([WORKER_SRC], { type: 'application/javascript' }))); } catch (e) { detWorker = null; }
+    if (detWorker) detWorker.onmessage = (e) => { detectBusy = false; onDetectResult(e.data); };
+
+    let procCanvas = document.createElement('canvas');
+    function detectTick() {
+      if (!detecting) return;
+      const vw = cam2.videoWidth, vh = cam2.videoHeight;
+      if (detWorker && !detectBusy && vw && vh) {
+        const pw = PROC_W, ph = Math.max(1, Math.round(PROC_W * vh / vw));
+        procCanvas.width = pw; procCanvas.height = ph;
+        if (detectCanvas.width !== pw) { detectCanvas.width = pw; detectCanvas.height = ph; }
+        const pctx = procCanvas.getContext('2d', { willReadFrequently: true });
+        pctx.drawImage(cam2, 0, 0, pw, ph);
+        const img = pctx.getImageData(0, 0, pw, ph);
+        detectBusy = true;
+        detWorker.postMessage({ data: img.data, w: pw, h: ph }, [img.data.buffer]);
+      }
+      setTimeout(() => requestAnimationFrame(detectTick), 110); // ~6–8 fps
+    }
+
+    function onDetectResult({ quad, conf }) {
+      lastQuad = (quad && conf > 0.18) ? quad : null;
+      lastConf = conf || 0;
+      drawDetect();
+      if (camHint) camHint.textContent = lastQuad ? 'Page detected — hold steady' : 'Fit the whole sheet inside the frame';
+    }
+
+    function drawDetect() {
+      const ctx = detectCanvas.getContext('2d');
+      ctx.clearRect(0, 0, detectCanvas.width, detectCanvas.height);
+      if (!lastQuad) return;
+      const locked = lastConf > 0.30;
+      ctx.lineWidth = 3; ctx.lineJoin = 'round';
+      ctx.strokeStyle = locked ? '#22c55e' : '#60a5fa';
+      ctx.fillStyle   = locked ? 'rgba(34,197,94,0.18)' : 'rgba(96,165,250,0.14)';
+      ctx.beginPath(); ctx.moveTo(lastQuad[0][0], lastQuad[0][1]);
+      for (let i = 1; i < 4; i++) ctx.lineTo(lastQuad[i][0], lastQuad[i][1]);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      lastQuad.forEach(p => { ctx.beginPath(); ctx.arc(p[0], p[1], 4, 0, 6.283); ctx.fillStyle = ctx.strokeStyle; ctx.fill(); });
+    }
 
     // Show exactly one stage view + the right dock buttons for a mode.
     function setMode(mode) {
@@ -410,11 +501,16 @@
         cam.srcObject = stream;
         await cam.play();
         setMode('camera');
+        lastQuad = null; lastConf = 0; detecting = true; requestAnimationFrame(detectTick);
       } catch (e) {
         camInput.value = ''; camInput.click(); // permission denied → native camera
       }
     }
-    function stopCamera() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } cam.srcObject = null; }
+    function stopCamera() {
+      detecting = false;
+      if (detectCanvas.width) detectCanvas.getContext('2d').clearRect(0, 0, detectCanvas.width, detectCanvas.height);
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } cam.srcObject = null;
+    }
 
     captureBtn.onclick = startCamera;
     cancelBtn.onclick  = () => { stopCamera(); setMode('ready'); };
@@ -426,6 +522,11 @@
       buzz(15);
       const scale = Math.min(1, MAX_EDGE / Math.max(vw, vh));
       const cw = Math.round(vw * scale), ch = Math.round(vh * scale);
+      // Map the last detected quad (proc-frame px) → captured-image px, if confident
+      if (lastQuad && lastConf > 0.2) {
+        const f = cw / PROC_W; // proc and capture are both uniform downscales of the video
+        sentCorners = lastQuad.map(p => ({ x: +(p[0] * f).toFixed(1), y: +(p[1] * f).toFixed(1) }));
+      } else sentCorners = null;
       const c = document.createElement('canvas'); c.width = cw; c.height = ch;
       c.getContext('2d').drawImage(cam, 0, 0, cw, ch);
       c.toBlob(blob => { stopCamera(); usePhoto(blob, 'photo.jpg'); }, 'image/jpeg', JPEG_Q);
@@ -435,6 +536,7 @@
     camInput.onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
+      sentCorners = null; // no live detection on the native path
       const img = new Image();
       img.onload = () => {
         const scale = Math.min(1, MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
@@ -471,6 +573,7 @@
       conn.send(JSON.stringify({
         type: 'meta', name: selectedFile.name,
         size: buf.byteLength, mime: selectedFile.type,
+        corners: sentCorners,   // live-detected page corners (captured-image px), or null
       }));
 
       const dc = conn.dataChannel;
