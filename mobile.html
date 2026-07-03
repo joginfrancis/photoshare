@@ -340,8 +340,8 @@
     const camHint     = document.getElementById('cam-hint');
 
     const CHUNK = 16 * 1024;
-    const MAX_EDGE = 2000;   // downscale long edge before sending
-    const JPEG_Q = 0.85;
+    const MAX_EDGE = 4000;   // only downscale if the photo is larger than this
+    const JPEG_Q = 0.92;
     const PROC_W = 320;      // detection works on a small downscaled frame
     let conn, selectedFile, stream = null;
     let detecting = false, lastQuad = null, lastConf = 0, detectBusy = false;
@@ -498,7 +498,7 @@
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { camInput.value = ''; camInput.click(); return; }
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 2560 }, height: { ideal: 1440 } },
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 3840 }, height: { ideal: 2160 } },
           audio: false,
         });
         cam.srcObject = stream;
@@ -519,15 +519,25 @@
     cancelBtn.onclick  = () => { stopCamera(); setMode('ready'); };
     retakeBtn.onclick  = startCamera;
 
-    shutterBtn.onclick = () => {
+    shutterBtn.onclick = async () => {
       const vw = cam.videoWidth, vh = cam.videoHeight;
       if (!vw || !vh) return;
       buzz(15);
+      const track = stream && stream.getVideoTracks && stream.getVideoTracks()[0];
+      // Prefer a full-resolution still via ImageCapture (video frames are only ~1080p)
+      if (track && window.ImageCapture) {
+        try {
+          const still = await new ImageCapture(track).takePhoto();
+          sentCorners = null;              // detection re-runs on the PC at full res
+          stopCamera();
+          return usePhoto(still, 'photo.jpg');
+        } catch (e) { /* fall back to the video frame below */ }
+      }
+      // Fallback: grab the current video frame (no downscale unless huge)
       const scale = Math.min(1, MAX_EDGE / Math.max(vw, vh));
       const cw = Math.round(vw * scale), ch = Math.round(vh * scale);
-      // Map the last detected quad (proc-frame px) → captured-image px, if confident
       if (lastQuad && lastConf > 0.15) {
-        const f = cw / PROC_W; // proc and capture are both uniform downscales of the video
+        const f = cw / PROC_W;
         sentCorners = lastQuad.map(p => ({ x: +(p[0] * f).toFixed(1), y: +(p[1] * f).toFixed(1) }));
       } else sentCorners = null;
       const c = document.createElement('canvas'); c.width = cw; c.height = ch;
@@ -535,14 +545,17 @@
       c.toBlob(blob => { stopCamera(); usePhoto(blob, 'photo.jpg'); }, 'image/jpeg', JPEG_Q);
     };
 
-    // Native fallback: downscale the picked file to keep transfers fast.
+    // Native picker: send the ORIGINAL file untouched (full quality) unless it's huge.
     camInput.onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      sentCorners = null; // no live detection on the native path
+      sentCorners = null; // detection runs on the PC
       const img = new Image();
       img.onload = () => {
-        const scale = Math.min(1, MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+        if (Math.max(img.naturalWidth, img.naturalHeight) <= MAX_EDGE) {
+          return usePhoto(file, file.name || 'photo.jpg'); // no re-encode → no quality loss
+        }
+        const scale = MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight);
         const cw = Math.round(img.naturalWidth * scale), ch = Math.round(img.naturalHeight * scale);
         const c = document.createElement('canvas'); c.width = cw; c.height = ch;
         c.getContext('2d').drawImage(img, 0, 0, cw, ch);
